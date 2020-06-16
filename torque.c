@@ -14,6 +14,7 @@
 #include "rtapi.h"              /* RTAPI realtime OS API */
 #include "rtapi_app.h"          /* RTAPI realtime module decls */
 #include "rtapi_errno.h"        /* EINVAL etc */
+#include "rtapi_math.h"
 #include "hal.h"                /* HAL public API decls */
 
 #include <stdlib.h>
@@ -25,10 +26,19 @@ MODULE_AUTHOR("John Allwine");
 MODULE_DESCRIPTION("Torque output from PWM feedback from ClearPath motors.");
 MODULE_LICENSE("GPL");
 
+#define NUM_SAMPLES 10
+#define SAMPLE_EVERY 1000
+
 typedef struct {
   hal_float_t *duty_cycle;
   hal_float_t *torque;
+  hal_float_t *rms_torque;
+  hal_float_t *max_rms_torque;
+  hal_float_t *max_torque;
   hal_float_t *ratio;
+  float samples[NUM_SAMPLES];
+  int cur_sample_index;
+  int sample_counter;
 } torque_t;
 
 static torque_t *data;
@@ -56,6 +66,25 @@ static void update(void *arg, long period) {
     }
 
     *(data[i].torque) = ratio*t;
+    if(t > *(data[i].max_torque)) {
+      *(data[i].max_torque) = t;
+    }
+
+    data[i].sample_counter = (data[i].sample_counter+1)%SAMPLE_EVERY;
+    if(data[i].sample_counter == 0) {
+      data[i].samples[data[i].cur_sample_index] = t*t;
+      data[i].cur_sample_index = (data[i].cur_sample_index+1)%NUM_SAMPLES;
+
+      float sum_of_squared_torques = 0;
+      for(int j = 0; j < NUM_SAMPLES; j++) {
+        sum_of_squared_torques += data[i].samples[j];
+      }
+      float rms_torque = rtapi_sqrt(sum_of_squared_torques/NUM_SAMPLES);
+      *(data[i].rms_torque) = rms_torque;
+      if(rms_torque > *(data[i].max_rms_torque)) {
+        *(data[i].max_rms_torque) = rms_torque;
+      }
+    }
   }
 }
 
@@ -84,6 +113,24 @@ int rtapi_app_main(void) {
       hal_exit(comp_id);
       return -1;
     }
+    retval = hal_pin_float_newf(HAL_OUT, &(data[i].rms_torque), comp_id, "%s.%c.rms_torque", modname, axes[i]);
+    if(retval < 0) {
+      rtapi_print_msg(RTAPI_MSG_ERR, "%s: ERROR: could not create pin %s.c.rms_torque", modname, modname, axes[i]);
+      hal_exit(comp_id);
+      return -1;
+    }
+    retval = hal_pin_float_newf(HAL_OUT, &(data[i].max_rms_torque), comp_id, "%s.%c.max_rms_torque", modname, axes[i]);
+    if(retval < 0) {
+      rtapi_print_msg(RTAPI_MSG_ERR, "%s: ERROR: could not create pin %s.c.max_rms_torque", modname, modname, axes[i]);
+      hal_exit(comp_id);
+      return -1;
+    }
+    retval = hal_pin_float_newf(HAL_OUT, &(data[i].max_torque), comp_id, "%s.%c.max_torque", modname, axes[i]);
+    if(retval < 0) {
+      rtapi_print_msg(RTAPI_MSG_ERR, "%s: ERROR: could not create pin %s.c.max_torque", modname, modname, axes[i]);
+      hal_exit(comp_id);
+      return -1;
+    }
     retval = hal_pin_float_newf(HAL_IN, &(data[i].ratio), comp_id, "%s.%c.ratio", modname, axes[i]);
     if(retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR, "%s: ERROR: could not create pin %s.c.ratio", modname, modname, axes[i]);
@@ -93,6 +140,10 @@ int rtapi_app_main(void) {
     *(data[i].duty_cycle) = 0;
     *(data[i].torque) = 0;
     *(data[i].ratio) = 1;
+
+    memset(data[i].samples, 0, NUM_SAMPLES*sizeof(float));
+    data[i].cur_sample_index = 0;
+    data[i].sample_counter = 0;
   }
 
   char name[20];
