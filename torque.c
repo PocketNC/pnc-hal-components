@@ -101,39 +101,39 @@ int rtapi_app_main(void) {
   data = hal_malloc(num_axes*sizeof(torque_t));
 
   for(int i = 0; i  < num_axes; i++) {
-    retval = hal_pin_float_newf(HAL_IN, &(data[i].duty_cycle), comp_id, "%s.duty_cycle.%s", modname, axes[i]);
+    retval = hal_pin_float_newf(HAL_IN, &(data[i].duty_cycle), comp_id, "%s.duty_cycle.%c", modname, axes[i]);
     if(retval < 0) {
-      rtapi_print_msg(RTAPI_MSG_ERR, "%s: ERROR: could not create pin %s.duty_cycle.%s", modname, modname, axes[i]);
+      rtapi_print_msg(RTAPI_MSG_ERR, "%s: ERROR: could not create pin %s.duty_cycle.%c", modname, modname, axes[i]);
       hal_exit(comp_id);
       return -1;
     }
-    retval = hal_pin_float_newf(HAL_OUT, &(data[i].torque), comp_id, "%s.%s", modname, axes[i]);
+    retval = hal_pin_float_newf(HAL_OUT, &(data[i].torque), comp_id, "%s.%c", modname, axes[i]);
     if(retval < 0) {
-      rtapi_print_msg(RTAPI_MSG_ERR, "%s: ERROR: could not create pin %s.%s", modname, modname, axes[i]);
+      rtapi_print_msg(RTAPI_MSG_ERR, "%s: ERROR: could not create pin %s.%c", modname, modname, axes[i]);
       hal_exit(comp_id);
       return -1;
     }
-    retval = hal_pin_float_newf(HAL_OUT, &(data[i].rms_torque), comp_id, "%s.rms_torque.%s", modname, axes[i]);
+    retval = hal_pin_float_newf(HAL_OUT, &(data[i].rms_torque), comp_id, "%s.rms_torque.%c", modname, axes[i]);
     if(retval < 0) {
-      rtapi_print_msg(RTAPI_MSG_ERR, "%s: ERROR: could not create pin %s.rms_torque.%s", modname, modname, axes[i]);
+      rtapi_print_msg(RTAPI_MSG_ERR, "%s: ERROR: could not create pin %s.rms_torque.%c", modname, modname, axes[i]);
       hal_exit(comp_id);
       return -1;
     }
-    retval = hal_pin_float_newf(HAL_OUT, &(data[i].max_rms_torque), comp_id, "%s.max_rms_torque.%s", modname, axes[i]);
+    retval = hal_pin_float_newf(HAL_OUT, &(data[i].max_rms_torque), comp_id, "%s.max_rms_torque.%c", modname, axes[i]);
     if(retval < 0) {
-      rtapi_print_msg(RTAPI_MSG_ERR, "%s: ERROR: could not create pin %s.max_rms_torque.%s", modname, modname, axes[i]);
+      rtapi_print_msg(RTAPI_MSG_ERR, "%s: ERROR: could not create pin %s.max_rms_torque.%c", modname, modname, axes[i]);
       hal_exit(comp_id);
       return -1;
     }
-    retval = hal_pin_float_newf(HAL_OUT, &(data[i].max_torque), comp_id, "%s.max_torque.%s", modname, axes[i]);
+    retval = hal_pin_float_newf(HAL_OUT, &(data[i].max_torque), comp_id, "%s.max_torque.%c", modname, axes[i]);
     if(retval < 0) {
-      rtapi_print_msg(RTAPI_MSG_ERR, "%s: ERROR: could not create pin %s.max_torque.%s", modname, modname, axes[i]);
+      rtapi_print_msg(RTAPI_MSG_ERR, "%s: ERROR: could not create pin %s.max_torque.%c", modname, modname, axes[i]);
       hal_exit(comp_id);
       return -1;
     }
-    retval = hal_pin_float_newf(HAL_IN, &(data[i].ratio), comp_id, "%s.ratio.%s", modname, axes[i]);
+    retval = hal_pin_float_newf(HAL_IN, &(data[i].ratio), comp_id, "%s.ratio.%c", modname, axes[i]);
     if(retval < 0) {
-      rtapi_print_msg(RTAPI_MSG_ERR, "%s: ERROR: could not create pin %s.ratio.%s", modname, modname, axes[i]);
+      rtapi_print_msg(RTAPI_MSG_ERR, "%s: ERROR: could not create pin %s.ratio.%c", modname, modname, axes[i]);
       hal_exit(comp_id);
       return -1;
     }
