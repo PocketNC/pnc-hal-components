@@ -26,9 +26,6 @@ MODULE_AUTHOR("John Allwine");
 MODULE_DESCRIPTION("Torque output from PWM feedback from ClearPath motors.");
 MODULE_LICENSE("GPL");
 
-#define NUM_SAMPLES 10
-#define SAMPLE_EVERY 1000
-
 typedef struct {
   hal_float_t *duty_cycle;
   hal_float_t *torque;
@@ -36,6 +33,7 @@ typedef struct {
   hal_float_t *ratio;
   hal_float_t *filter;
   hal_bit_t *fault;
+  bool lastFault;
 } torque_t;
 
 static torque_t *data;
@@ -66,7 +64,14 @@ static void update(void *arg, long period) {
     *(data[i].torque) = ratio*t;
     *(data[i].avg_torque) = *(data[i].avg_torque)*filter + rtapi_fabs(ratio*t)*(1-filter);
 
-    *(data[i].fault) = (d > .99);
+    bool fault = d > .99;
+    *(data[i].fault) = fault;
+
+    if(fault &&  !data[i].lastFault) {
+      rtapi_print_msg(RTAPI_MSG_ERR, "%s: Motor %c fault.", modname, axes[i]);
+    }
+
+    data[i].lastFault = fault;
   }
 }
 
