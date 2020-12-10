@@ -63,28 +63,32 @@ static void update(void *arg, long period) {
   const float bv = (B-data->lastB)/dt;
   const float cv = (C-data->lastC)/dt;
 
-  const float CB = rtapi_cos(B);
-  const float SB = rtapi_sin(B);
-  const float CC = rtapi_cos(C);
-  const float SC = rtapi_sin(C);
+  const float CB = rtapi_cos(-B);
+  const float SB = rtapi_sin(-B);
+  const float CC = rtapi_cos(-C);
+  const float SC = rtapi_sin(-C);
 
-  const float Qx = CC*CB*X-SC*CB*Y+SB*Z;
-  const float Qy = SC*X+CC*Y;
-  const float Qz = -CC*SB*X+SC*SB*Y+CB*Z;
+  const float omegaX = -SB*cv;
+  const float omegaY = bv;
+  const float omegaZ = CB*cv;
 
-  const float lx = CC*CB*xv-SC*CB*yv+SB*zv;
-  const float ly = SC*xv+CC*yv;
-  const float lz = -CC*SB*xv+SC*SB*yv+CB*zv;
+  // linear velocity
+  const float lx = xv;
+  const float ly = yv;
+  const float lz = zv;
 
-  const float rx =  -bv*Qz + cv*Qy;
-  const float ry =        - cv*Qx;
-  const float rz = bv*Qx;
+  // rotational velocity, r cross omega
+
+  const float rx = Y*omegaZ-Z*omegaY;
+  const float ry = Z*omegaX-X*omegaZ;
+  const float rz = X*omegaY-Y*omegaX;
 
   const float vx = lx+rx;
   const float vy = ly+ry;
   const float vz = lz+rz;
 
-  *(data->feedrate) = rtapi_sqrt((vx*vx)+(vy*vy)+(vz*vz)); 
+  const float feedrate = rtapi_sqrt((vx*vx)+(vy*vy)+(vz*vz)); 
+  *(data->feedrate) = feedrate;
 
   data->lastX = X;
   data->lastY = Y;
