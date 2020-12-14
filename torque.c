@@ -67,8 +67,15 @@ static void update(void *arg, long period) {
     bool fault = d > .99;
     *(data[i].fault) = fault;
 
+    // TODO - move these messages to an E-Stop component that
+    // monitors the fault pins and properly logs the reason
+    // for an E-Stop.
     if(fault &&  !data[i].lastFault) {
       rtapi_print_msg(RTAPI_MSG_ERR, "%s: Motor %c fault.", modname, axes[i]);
+    }
+
+    if(!fault && data[i].lastFault) {
+      rtapi_print_msg(RTAPI_MSG_ERR, "%s: Cleared fault on motor %c.", modname, axes[i]);
     }
 
     data[i].lastFault = fault;
