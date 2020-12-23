@@ -36,7 +36,15 @@ MODULE_LICENSE("GPL");
   }
 
 typedef struct {
+  // Latched button state variables.
+  // We capture when the physical E-Stop button
+  // was pushed or released for timing or for
+  // making assumptions about motor/spindle faults
+  // (the motors and VFD will report faults when
+  // they aren't powered, which they own't be if
+  // the physical E-Stop button is pressed).
   hal_bit_t buttonPushed;
+  hal_bit_t buttonReleased;
 
   // Latched fault variables.
   // When a fault is detected these variables will stay high
@@ -72,7 +80,13 @@ typedef struct {
   // stay high after the user clicks a button to reset
   // E-Stop until the motors have a chance to disable then
   // re-enable.
-  hal_bit_t userRequestedEnable;
+  // This is also an output that must be connected to
+  // halui.estop.reset in order to clear the software
+  // E-Stop condition in the case that the user releases
+  // the physical E-Stop (the software E-Stop is cleared
+  // via the python interface when clicking the E-Stop
+  // button in the UI).
+  hal_bit_t *userRequestedEnable;
 
   // Timer that restarts when the user clicks a button to
   // reset E-Stop. Is used to time various pulse times,
@@ -84,6 +98,12 @@ typedef struct {
   // motor faults at start up, when they haven't been powered
   // on yet.
   hal_u32_t timeSinceStartUp;
+
+  // Timer that starts once the physical E-Stop button has been
+  // released. Used to make assumptions about motor and spindle
+  // faults and to allow enough time to pass before attempting
+  // to re-enable motors after powering them up.
+  hal_u32_t timeSinceButtonRelease;
 
   // emcEnable is False when in E-Stop and True when not in E-stop.
   // Connect to iocontrol.0.emc-enable-in.
@@ -115,16 +135,17 @@ typedef struct {
 
 // Max time of the timer. Since we don't need the timer for very long
 // this ensures we never overflow the timer.
-#define MAX_TIME 2000
+#define MAX_TIME 6000
 
 // Time when the machine-on pin should go high after a reset.
 #define MACHINE_ON_TIME 1100
 
-// How much time to all the motors to get out of a fault state at start up.
+// How much time to give all the motors to get out of a fault state at start up or
+// after releasing the physical E-Stop button.
 // The motors report a fault when powered off, so we use various conditions to
 // avoid reporting a fault in that condition, such as at startup and when the
 // physical E-Stop button is pushed.
-#define STARTUP_TIME 2000
+#define STARTUP_TIME 3000
 
 // How long to disable the motors for after a reset. Will be re-enabled after
 // this time elapses.
@@ -151,7 +172,7 @@ static void update(void *arg, long period) {
   const hal_bit_t spindleModbusOk = *(data->spindleModbusOk);
   const hal_u32_t timeSinceEnable = data->timeSinceEnable;
   const hal_bit_t userRequestEnable = *(data->userRequestEnable);
-  const hal_bit_t userRequestedEnable = data->userRequestedEnable;
+  const hal_bit_t userRequestedEnable = *(data->userRequestedEnable);
   const hal_bit_t xFaulted = data->xFaulted;
   const hal_bit_t yFaulted = data->yFaulted;
   const hal_bit_t zFaulted = data->zFaulted;
@@ -160,6 +181,7 @@ static void update(void *arg, long period) {
   const hal_bit_t spindleErroredWithCode = data->spindleErroredWithCode;
   const hal_bit_t spindleModbusNotOk = data->spindleModbusNotOk;
   const hal_bit_t buttonPushed = data->buttonPushed;
+  const hal_bit_t buttonReleased = data->buttonReleased;
 
   // The motors and spindle VFD report errors when power is cut due to the physical E-Stop button being pressed.
   // To avoid reporting that there is a spindle or motor fault when the button is pressed, we use the following
@@ -167,7 +189,11 @@ static void update(void *arg, long period) {
   // Check that the button isn't pressed or was latched.
   // Check that enough time after start up has elapsed.
   // Check that enough time after a user initiated E-Stop reset has elapsed.
-  const hal_bit_t preventFaultsFromButtonPushAndStartup = !button && !buttonPushed && data->timeSinceStartUp > STARTUP_TIME && data->timeSinceEnable > RESET_TIME;
+  const hal_bit_t preventFaultsFromButtonPushAndStartup = !button && 
+                                                          !buttonPushed && 
+                                                          data->timeSinceStartUp > STARTUP_TIME && 
+                                                          data->timeSinceEnable > RESET_TIME &&
+                                                          data->timeSinceButtonRelease > STARTUP_TIME;
 
   if(xFault && preventFaultsFromButtonPushAndStartup) {
     // Only report the fault when it first happens
@@ -225,6 +251,13 @@ static void update(void *arg, long period) {
       rtapi_print_msg(RTAPI_MSG_ERR, "E-Stop button pressed.");
     }
     data->buttonPushed = true;
+  } 
+
+  if(buttonPushed && !button) {
+    if(!buttonReleased) {
+      data->timeSinceButtonRelease = 0;
+    }
+    data->buttonReleased = true;
   }
 
   // current fault state
@@ -248,14 +281,14 @@ static void update(void *arg, long period) {
                       buttonPushed;
 
   // When user initiates an E-Stop reset
-  if(userRequestEnable) {
+  if(!(*(data->userRequestedEnable)) && (userRequestEnable || (buttonReleased && data->timeSinceButtonRelease > STARTUP_TIME))) {
     // Latch the userRequestedEnable variable and reset our timer
-    data->userRequestedEnable = 1;
+    *(data->userRequestedEnable) = 1;
     data->timeSinceEnable = 0;
   }
 
   hal_bit_t reset = false;
-  if(data->userRequestedEnable) {
+  if(*(data->userRequestedEnable)) {
     // Once the user has requested to reset E-Stop, we disable
     // the motors and re-enable them to clear any fault conditions.
     if(data->timeSinceEnable < DISABLE_MOTOR_TIME) {
@@ -264,7 +297,7 @@ static void update(void *arg, long period) {
       *(data->zMotorEnable) = false;
       *(data->bMotorEnable) = false;
       *(data->cMotorEnable) = false;
-    } else { 
+    } else {
       *(data->xMotorEnable) = true;
       *(data->yMotorEnable) = true;
       *(data->zMotorEnable) = true;
@@ -285,10 +318,16 @@ static void update(void *arg, long period) {
       data->spindleErroredWithCode = 0;
       data->spindleModbusNotOk = false;
       data->buttonPushed = false;
-      data->userRequestedEnable = false;
+      data->buttonReleased = false;
+      *(data->userRequestedEnable) = false;
 
       reset = true;
     }
+  }
+
+  // prevent potentially overflowing our timer variable
+  if(data->timeSinceButtonRelease <= MAX_TIME) {
+    data->timeSinceButtonRelease += 1;
   }
 
   // prevent potentially overflowing our timer variable
@@ -297,13 +336,17 @@ static void update(void *arg, long period) {
   }
 
   // prevent potentially overflowing our timer variable
-  if(data->timeSinceStartUp <= STARTUP_TIME) {
+  if(data->timeSinceStartUp <= MAX_TIME) {
     data->timeSinceStartUp += 1;
   }
 
   *(data->emcEnable) = !fault && *(data->userEnable) && (!faulted || (faulted && reset));
 
-  // Delay turning the machine on for a short period of time after resetting the software E-Stop 
+  // Delay turning the machine on for a short period of time after resetting the software E-Stop.
+  // machineOn should be connected to halui.machine.on, which will drive halui.machine.is-on high,
+  // which is required in order to home or do anything CNC-wise. It doesn't seem to always take if
+  // it's toggled on at the same time as emcEnable, so we add a small delay to ensure we properly
+  // set the machine state to on.
   *(data->machineOn) = *(data->emcEnable) && data->timeSinceEnable > MACHINE_ON_TIME;
 }
 
@@ -327,6 +370,7 @@ int rtapi_app_main(void) {
   PIN(bit, HAL_IN, spindleModbusOk, spindle-modbus-ok);
 
   PIN(bit, HAL_IN, userRequestEnable, user-request-enable);
+  PIN(bit, HAL_OUT, userRequestedEnable, user-requested-enable);
 
   PIN(bit, HAL_OUT, emcEnable, emc-enable);
   PIN(bit, HAL_IN, userEnable, user-enable);
