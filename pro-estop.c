@@ -55,6 +55,13 @@ typedef struct {
   hal_bit_t zFaulted;
   hal_bit_t bFaulted;
   hal_bit_t cFaulted;
+
+  hal_bit_t xFErrored;
+  hal_bit_t yFErrored;
+  hal_bit_t zFErrored;
+  hal_bit_t bFErrored;
+  hal_bit_t cFErrored;
+
   hal_s32_t spindleErroredWithCode;
   hal_bit_t spindleModbusNotOk;
 
@@ -69,6 +76,13 @@ typedef struct {
   hal_bit_t *button;           // Reports the state of the physical E-Stop button that disconnects power to the motors via a relay.
   hal_s32_t *spindleErrorCode; // Reports an error code from the VFD that controls the spindle. Connect to spindle-vfd.error-code.
   hal_bit_t *spindleModbusOk;  // Reports whether the ModBus connection to the VFD that controls the spindle is ok. Connect to spindle-vfd.modbus-ok.
+
+  // Following error flags for each joint
+  hal_bit_t *xFError;
+  hal_bit_t *yFError;
+  hal_bit_t *zFError;
+  hal_bit_t *bFError;
+  hal_bit_t *cFError;
 
   // The user-request-enable pin should be connected
   // to iocontrol.0.user-request-enable and indicates
@@ -167,17 +181,32 @@ static void update(void *arg, long period) {
   const hal_bit_t zFault = *(data->zFault);
   const hal_bit_t bFault = *(data->bFault);
   const hal_bit_t cFault = *(data->cFault);
+
+  const hal_bit_t xFError = *(data->xFError);
+  const hal_bit_t yFError = *(data->yFError);
+  const hal_bit_t zFError = *(data->zFError);
+  const hal_bit_t bFError = *(data->bFError);
+  const hal_bit_t cFError = *(data->cFError);
+
   const hal_bit_t button = *(data->button);
   const hal_s32_t spindleErrorCode = *(data->spindleErrorCode);
   const hal_bit_t spindleModbusOk = *(data->spindleModbusOk);
   const hal_u32_t timeSinceEnable = data->timeSinceEnable;
   const hal_bit_t userRequestEnable = *(data->userRequestEnable);
   const hal_bit_t userRequestedEnable = *(data->userRequestedEnable);
+
   const hal_bit_t xFaulted = data->xFaulted;
   const hal_bit_t yFaulted = data->yFaulted;
   const hal_bit_t zFaulted = data->zFaulted;
   const hal_bit_t bFaulted = data->bFaulted;
   const hal_bit_t cFaulted = data->cFaulted;
+
+  const hal_bit_t xFErrored = data->xFErrored;
+  const hal_bit_t yFErrored = data->yFErrored;
+  const hal_bit_t zFErrored = data->zFErrored;
+  const hal_bit_t bFErrored = data->bFErrored;
+  const hal_bit_t cFErrored = data->cFErrored;
+
   const hal_bit_t spindleErroredWithCode = data->spindleErroredWithCode;
   const hal_bit_t spindleModbusNotOk = data->spindleModbusNotOk;
   const hal_bit_t buttonPushed = data->buttonPushed;
@@ -232,6 +261,41 @@ static void update(void *arg, long period) {
     data->cFaulted = true;
   }
 
+  if(xFError) {
+    if(!xFErrored) {
+      rtapi_print_msg(RTAPI_MSG_ERR, "E-Stop: X following error.");
+    }
+    data->xFErrored = true;
+  }
+
+  if(yFError) {
+    if(!yFErrored) {
+      rtapi_print_msg(RTAPI_MSG_ERR, "E-Stop: Y following error.");
+    }
+    data->yFErrored = true;
+  }
+
+  if(zFError) {
+    if(!zFErrored) {
+      rtapi_print_msg(RTAPI_MSG_ERR, "E-Stop: Z following error.");
+    }
+    data->zFErrored = true;
+  }
+
+  if(bFError) {
+    if(!bFErrored) {
+      rtapi_print_msg(RTAPI_MSG_ERR, "E-Stop: B following error.");
+    }
+    data->bFErrored = true;
+  }
+
+  if(cFError) {
+    if(!cFErrored) {
+      rtapi_print_msg(RTAPI_MSG_ERR, "E-Stop: C following error.");
+    }
+    data->cFErrored = true;
+  }
+
   if(spindleErrorCode != 0 && preventFaultsFromButtonPushAndStartup) {
     if(spindleErroredWithCode == 0) {
       rtapi_print_msg(RTAPI_MSG_ERR, "E-Stop: Spindle error: code %d", spindleErrorCode);
@@ -266,6 +330,11 @@ static void update(void *arg, long period) {
                     zFault ||
                     bFault ||
                     cFault ||
+                    xFError ||
+                    yFError ||
+                    zFError ||
+                    bFError ||
+                    cFError ||
                     !spindleModbusOk ||
                     spindleErrorCode != 0 ||
                     button;
@@ -276,6 +345,11 @@ static void update(void *arg, long period) {
                       zFaulted ||
                       bFaulted ||
                       cFaulted ||
+                      xFErrored ||
+                      yFErrored ||
+                      zFErrored ||
+                      bFErrored ||
+                      cFErrored ||
                       spindleModbusNotOk ||
                       spindleErroredWithCode != 0 ||
                       buttonPushed;
@@ -315,6 +389,13 @@ static void update(void *arg, long period) {
       data->zFaulted = false;
       data->bFaulted = false;
       data->cFaulted = false;
+
+      data->xFErrored = false;
+      data->yFErrored = false;
+      data->zFErrored = false;
+      data->bFErrored = false;
+      data->cFErrored = false;
+
       data->spindleErroredWithCode = 0;
       data->spindleModbusNotOk = false;
       data->buttonPushed = false;
@@ -365,6 +446,13 @@ int rtapi_app_main(void) {
   PIN(bit, HAL_IN, zFault, z-fault);
   PIN(bit, HAL_IN, bFault, b-fault);
   PIN(bit, HAL_IN, cFault, c-fault);
+
+  PIN(bit, HAL_IN, xFError, x-f-error);
+  PIN(bit, HAL_IN, yFError, y-f-error);
+  PIN(bit, HAL_IN, zFError, z-f-error);
+  PIN(bit, HAL_IN, bFError, b-f-error);
+  PIN(bit, HAL_IN, cFError, c-f-error);
+
   PIN(bit, HAL_IN, button, button);
   PIN(s32, HAL_IN, spindleErrorCode, spindle-error-code);
   PIN(bit, HAL_IN, spindleModbusOk, spindle-modbus-ok);
@@ -388,6 +476,13 @@ int rtapi_app_main(void) {
   *(data->zFault) = 0;
   *(data->bFault) = 0;
   *(data->cFault) = 0;
+
+  *(data->xFError) = 0;
+  *(data->yFError) = 0;
+  *(data->zFError) = 0;
+  *(data->bFError) = 0;
+  *(data->cFError) = 0;
+
   *(data->button) = 0;
   *(data->spindleErrorCode) = 0;
   *(data->spindleModbusOk) = 1;
@@ -401,6 +496,18 @@ int rtapi_app_main(void) {
   *(data->bMotorEnable) = 1;
   *(data->cMotorEnable) = 1;
   *(data->machineOn) = 0;
+
+  data->xFaulted = 0;
+  data->yFaulted = 0;
+  data->zFaulted = 0;
+  data->bFaulted = 0;
+  data->cFaulted = 0;
+
+  data->xFErrored = 0;
+  data->yFErrored = 0;
+  data->zFErrored = 0;
+  data->bFErrored = 0;
+  data->cFErrored = 0;
 
   data->timeSinceEnable = 0;
   data->timeSinceStartUp = 0;
