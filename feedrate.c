@@ -29,6 +29,16 @@ MODULE_LICENSE("GPL");
 
 #define PI 3.141592653589739
 
+// helper macro for easily creating HAL pins
+#define PIN(type,inOrOut,dataName,pinName) \
+  retval = hal_pin_##type##_newf((inOrOut), &(data->dataName), comp_id, "%s." #pinName, modname); \
+  if(retval < 0) { \
+    rtapi_print_msg(RTAPI_MSG_ERR, "%s: ERROR: could not create pin %s." #pinName, modname, modname); \
+    hal_exit(comp_id); \
+    return -1; \
+  }
+
+
 typedef struct {
   float lastX;
   float lastY;
@@ -42,6 +52,12 @@ typedef struct {
   hal_float_t *b;
   hal_float_t *c;
   hal_float_t *feedrate;
+
+  hal_float_t *xv;
+  hal_float_t *yv;
+  hal_float_t *zv;
+  hal_float_t *bv;
+  hal_float_t *cv;
 } data_t;
 
 static data_t *data;
@@ -89,6 +105,11 @@ static void update(void *arg, long period) {
 
   const float feedrate = rtapi_sqrt((vx*vx)+(vy*vy)+(vz*vz)); 
   *(data->feedrate) = feedrate;
+  *(data->xv) = xv;
+  *(data->yv) = yv;
+  *(data->zv) = zv;
+  *(data->bv) = bv*180/PI;
+  *(data->cv) = cv*180/PI;
 
   data->lastX = X;
   data->lastY = Y;
@@ -107,54 +128,18 @@ int rtapi_app_main(void) {
 
   data = hal_malloc(sizeof(data_t));
 
-  retval = hal_pin_float_newf(HAL_IN, &(data->x), comp_id, "%s.x", modname);
-  if(retval < 0) {
-    rtapi_print_msg(RTAPI_MSG_ERR, "%s: ERROR: could not create pin %s.x", modname, modname);
-    hal_exit(comp_id);
-    return -1;
-  }
-
-  retval = hal_pin_float_newf(HAL_IN, &(data->y), comp_id, "%s.y", modname);
-  if(retval < 0) {
-    rtapi_print_msg(RTAPI_MSG_ERR, "%s: ERROR: could not create pin %s.y", modname, modname);
-    hal_exit(comp_id);
-    return -1;
-  }
-
-  retval = hal_pin_float_newf(HAL_IN, &(data->z), comp_id, "%s.z", modname);
-  if(retval < 0) {
-    rtapi_print_msg(RTAPI_MSG_ERR, "%s: ERROR: could not create pin %s.z", modname, modname);
-    hal_exit(comp_id);
-    return -1;
-  }
-
-  retval = hal_pin_float_newf(HAL_IN, &(data->tz), comp_id, "%s.tz", modname);
-  if(retval < 0) {
-    rtapi_print_msg(RTAPI_MSG_ERR, "%s: ERROR: could not create pin %s.tz", modname, modname);
-    hal_exit(comp_id);
-    return -1;
-  }
-
-  retval = hal_pin_float_newf(HAL_IN, &(data->b), comp_id, "%s.b", modname);
-  if(retval < 0) {
-    rtapi_print_msg(RTAPI_MSG_ERR, "%s: ERROR: could not create pin %s.b", modname, modname);
-    hal_exit(comp_id);
-    return -1;
-  }
-
-  retval = hal_pin_float_newf(HAL_IN, &(data->c), comp_id, "%s.c", modname);
-  if(retval < 0) {
-    rtapi_print_msg(RTAPI_MSG_ERR, "%s: ERROR: could not create pin %s.c", modname, modname);
-    hal_exit(comp_id);
-    return -1;
-  }
-
-  retval = hal_pin_float_newf(HAL_OUT, &(data->feedrate), comp_id, "%s.feedrate", modname);
-  if(retval < 0) {
-    rtapi_print_msg(RTAPI_MSG_ERR, "%s: ERROR: could not create pin %s.feedrate", modname, modname);
-    hal_exit(comp_id);
-    return -1;
-  }
+  PIN(float, HAL_IN, x, x);
+  PIN(float, HAL_IN, y, y);
+  PIN(float, HAL_IN, z, z);
+  PIN(float, HAL_IN, tz, tz);
+  PIN(float, HAL_IN, b, b);
+  PIN(float, HAL_IN, c, c);
+  PIN(float, HAL_OUT, feedrate, feedrate);
+  PIN(float, HAL_OUT, xv, xv);
+  PIN(float, HAL_OUT, yv, yv);
+  PIN(float, HAL_OUT, zv, zv);
+  PIN(float, HAL_OUT, bv, bv);
+  PIN(float, HAL_OUT, cv, cv);
 
   *(data->x) = 0;
   *(data->y) = 0;
@@ -162,6 +147,11 @@ int rtapi_app_main(void) {
   *(data->b) = 0;
   *(data->c) = 0;
   *(data->feedrate) = 0;
+  *(data->xv) = 0;
+  *(data->yv) = 0;
+  *(data->zv) = 0;
+  *(data->bv) = 0;
+  *(data->cv) = 0;
 
   char name[20];
   rtapi_snprintf(name, sizeof(name), "%s.funct", modname);
