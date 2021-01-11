@@ -2,7 +2,8 @@
 * Description:  pro-estop
 *               This file, 'pro-estop.c', is a HAL component that 
 *               has inputs for various E-Stop conditions and will
-*               output an E-Stop and reset signals to halui.estop.
+*               output signals to iocontrol and halui to control
+*               E-Stop state.
 *
 * Author: John Allwine <john@pocketnc.com>
 * License: GPL Version 2
@@ -62,6 +63,9 @@ typedef struct {
   hal_bit_t bFErrored;
   hal_bit_t cFErrored;
 
+  hal_bit_t estop;
+  hal_bit_t estopped;
+
   hal_s32_t spindleErroredWithCode;
   hal_bit_t spindleModbusNotOk;
 
@@ -108,6 +112,8 @@ typedef struct {
   // the machine.
   hal_u32_t timeSinceEnable;
 
+  hal_u32_t timeSinceEStop;
+
   // Timer that starts at initialization. Used to prevent
   // motor faults at start up, when they haven't been powered
   // on yet.
@@ -145,11 +151,15 @@ typedef struct {
   hal_bit_t *zMotorEnable;
   hal_bit_t *bMotorEnable;
   hal_bit_t *cMotorEnable;
+
+  hal_bit_t *unhome;
 } data_t;
 
 // Max time of the timer. Since we don't need the timer for very long
 // this ensures we never overflow the timer.
 #define MAX_TIME 6000
+
+#define UNHOME_TIME 100
 
 // Time when the machine-on pin should go high after a reset.
 #define MACHINE_ON_TIME 1100
@@ -324,6 +334,8 @@ static void update(void *arg, long period) {
     data->buttonReleased = true;
   }
 
+  *(data->unhome) = data->estopped && data->timeSinceEStop > UNHOME_TIME;
+
   // current fault state
   hal_bit_t fault = xFault ||
                     yFault ||
@@ -400,6 +412,8 @@ static void update(void *arg, long period) {
       data->spindleModbusNotOk = false;
       data->buttonPushed = false;
       data->buttonReleased = false;
+
+      data->estopped = false;
       *(data->userRequestedEnable) = false;
 
       reset = true;
@@ -421,7 +435,18 @@ static void update(void *arg, long period) {
     data->timeSinceStartUp += 1;
   }
 
-  *(data->emcEnable) = !fault && *(data->userEnable) && (!faulted || (faulted && reset));
+  if(data->timeSinceEStop <= MAX_TIME) {
+    data->timeSinceEStop += 1;
+  }
+
+  data->estop = !(!fault && *(data->userEnable) && (!faulted || (faulted && reset)));
+
+  if(data->estop && !data->estopped) {
+    data->timeSinceEStop = 0;
+    data->estopped = true;
+  }
+
+  *(data->emcEnable) = !data->estop;
 
   // Delay turning the machine on for a short period of time after resetting the software E-Stop.
   // machineOn should be connected to halui.machine.on, which will drive halui.machine.is-on high,
@@ -470,6 +495,7 @@ int rtapi_app_main(void) {
   PIN(bit, HAL_OUT, zMotorEnable, z-motor-enable);
   PIN(bit, HAL_OUT, bMotorEnable, b-motor-enable);
   PIN(bit, HAL_OUT, cMotorEnable, c-motor-enable);
+  PIN(bit, HAL_OUT, unhome, unhome);
 
   *(data->xFault) = 0;
   *(data->yFault) = 0;
@@ -509,6 +535,10 @@ int rtapi_app_main(void) {
   data->bFErrored = 0;
   data->cFErrored = 0;
 
+  data->estop = 0;
+  data->estopped = 0;
+
+  data->timeSinceEStop = 0;
   data->timeSinceEnable = 0;
   data->timeSinceStartUp = 0;
 
