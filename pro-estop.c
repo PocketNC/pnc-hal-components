@@ -88,6 +88,8 @@ typedef struct {
   hal_bit_t *bFError;
   hal_bit_t *cFError;
 
+  hal_bit_t *ignoreComErrors;
+
   // The user-request-enable pin should be connected
   // to iocontrol.0.user-request-enable and indicates
   // that the user wants to reset E-Stop (they clicked
@@ -186,11 +188,14 @@ static const char *modname = "pro-estop";
 static int comp_id;
 
 static void update(void *arg, long period) {
-  const hal_bit_t xFault = *(data->xFault);
-  const hal_bit_t yFault = *(data->yFault);
-  const hal_bit_t zFault = *(data->zFault);
-  const hal_bit_t bFault = *(data->bFault);
-  const hal_bit_t cFault = *(data->cFault);
+  const hal_bit_t ignoreComErrors = *(data->ignoreComErrors);
+  const hal_bit_t notIgnoreComErrors = !ignoreComErrors;
+
+  const hal_bit_t xFault = *(data->xFault) && notIgnoreComErrors;
+  const hal_bit_t yFault = *(data->yFault) && notIgnoreComErrors;
+  const hal_bit_t zFault = *(data->zFault) && notIgnoreComErrors;
+  const hal_bit_t bFault = *(data->bFault) && notIgnoreComErrors;
+  const hal_bit_t cFault = *(data->cFault) && notIgnoreComErrors;
 
   const hal_bit_t xFError = *(data->xFError);
   const hal_bit_t yFError = *(data->yFError);
@@ -199,8 +204,8 @@ static void update(void *arg, long period) {
   const hal_bit_t cFError = *(data->cFError);
 
   const hal_bit_t button = *(data->button);
-  const hal_s32_t spindleErrorCode = *(data->spindleErrorCode);
-  const hal_bit_t spindleModbusOk = *(data->spindleModbusOk);
+  const hal_s32_t spindleErrorCode = *(data->spindleErrorCode) && notIgnoreComErrors;
+  const hal_bit_t spindleModbusOk = *(data->spindleModbusOk) || ignoreComErrors;
   const hal_u32_t timeSinceEnable = data->timeSinceEnable;
   const hal_bit_t userRequestEnable = *(data->userRequestEnable);
   const hal_bit_t userRequestedEnable = *(data->userRequestedEnable);
@@ -478,6 +483,8 @@ int rtapi_app_main(void) {
   PIN(bit, HAL_IN, bFError, b-f-error);
   PIN(bit, HAL_IN, cFError, c-f-error);
 
+  PIN(bit, HAL_IN, ignoreComErrors, ignore-com-errors);
+
   PIN(bit, HAL_IN, button, button);
   PIN(s32, HAL_IN, spindleErrorCode, spindle-error-code);
   PIN(bit, HAL_IN, spindleModbusOk, spindle-modbus-ok);
@@ -522,6 +529,8 @@ int rtapi_app_main(void) {
   *(data->bMotorEnable) = 1;
   *(data->cMotorEnable) = 1;
   *(data->machineOn) = 0;
+
+  *(data->ignoreComErrors) = 0;
 
   data->xFaulted = 0;
   data->yFaulted = 0;
