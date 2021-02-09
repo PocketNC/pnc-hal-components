@@ -1,6 +1,6 @@
 /********************************************************************
-* Description:  pro-estop
-*               This file, 'pro-estop.c', is a HAL component that 
+* Description:  solo-estop
+*               This file, 'solo-estop.c', is a HAL component that 
 *               has inputs for various E-Stop conditions and will
 *               output signals to iocontrol and halui to control
 *               E-Stop state.
@@ -184,7 +184,7 @@ typedef struct {
 
 static data_t *data;
 
-static const char *modname = "pro-estop";
+static const char *modname = "solo-estop";
 static int comp_id;
 
 static void update(void *arg, long period) {
