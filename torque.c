@@ -28,6 +28,7 @@ MODULE_LICENSE("GPL");
 
 typedef struct {
   hal_float_t *duty_cycle;
+  hal_float_t *frequency;
   hal_float_t *torque;
   hal_float_t *avg_torque;
   hal_float_t *ratio;
@@ -47,24 +48,37 @@ static int comp_id;
 
 static void update(void *arg, long period) {
   for(int i = 0; i < num_axes; i++) {
-    const float ratio = *(data[i].ratio);
-    const float d = *(data[i].duty_cycle);
+    const hal_float_t ratio = *(data[i].ratio);
+    const hal_float_t d = *(data[i].duty_cycle);
+    const hal_float_t f = *(data[i].frequency);
     float t = 0;
 
-    if(d >= .05 && d <= .95) {
-      if(d < .5) {
-        t = 1-((d-.05)/.45);
-      } else {
-        t = -(d-.5)/.45;
+    if(f > 0) {
+      // See SOFT-682 for more info. This is a work around to address some electrical
+      // issues where very short pulses on the feedback lines were causing the duty
+      // cycle to be reported higher than it should. Instead of only looking at the 
+      // duty cycle, we now look at both frequency and duty cycle to determine a high
+      // signal duration. We then use that high signal duration and the period of what the motor
+      // is configured to (482Hz so 1./482 seconds or ~2 milliseconds) to calculate
+      // a corrected duty cycle to use in our torque and fault calculations.
+      const hal_float_t highTime = 1./f*d;
+      const hal_float_t correctedD = highTime/0.002074688796680498;
+
+      if(correctedD >= .05 && correctedD <= .95) {
+        if(correctedD < .5) {
+          t = 1-((correctedD-.05)/.45);
+        } else {
+          t = -(correctedD-.5)/.45;
+        }
       }
+
+      const float filter = *(data[i].filter); // value between 0 and 1 used to average torque over time
+      *(data[i].torque) = ratio*t;
+      *(data[i].avg_torque) = *(data[i].avg_torque)*filter + rtapi_fabs(ratio*t)*(1-filter);
+
+      bool fault = correctedD > .99;
+      *(data[i].fault) = fault;
     }
-
-    const float filter = *(data[i].filter); // value between 0 and 1 used to average torque over time
-    *(data[i].torque) = ratio*t;
-    *(data[i].avg_torque) = *(data[i].avg_torque)*filter + rtapi_fabs(ratio*t)*(1-filter);
-
-    bool fault = d > .99;
-    *(data[i].fault) = fault;
   }
 }
 
@@ -84,6 +98,12 @@ int rtapi_app_main(void) {
     retval = hal_pin_float_newf(HAL_IN, &(data[i].duty_cycle), comp_id, "%s.duty_cycle.%c", modname, axes[i]);
     if(retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR, "%s: ERROR: could not create pin %s.duty_cycle.%c", modname, modname, axes[i]);
+      hal_exit(comp_id);
+      return -1;
+    }
+    retval = hal_pin_float_newf(HAL_IN, &(data[i].frequency), comp_id, "%s.frequency.%c", modname, axes[i]);
+    if(retval < 0) {
+      rtapi_print_msg(RTAPI_MSG_ERR, "%s: ERROR: could not create pin %s.frequency.%c", modname, modname, axes[i]);
       hal_exit(comp_id);
       return -1;
     }
@@ -118,6 +138,7 @@ int rtapi_app_main(void) {
       return -1;
     }
     *(data[i].duty_cycle) = 0;
+    *(data[i].frequency) = 0;
     *(data[i].torque) = 0;
     *(data[i].avg_torque) = 0;
     *(data[i].ratio) = 1;
