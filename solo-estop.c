@@ -141,7 +141,7 @@ typedef struct {
 
   // Power is connected to a pin that can trigger the same relay as
   // the physical E-Stop button in order to cut power to the spindle
-  // and axis motors. Currently unused.
+  // and axis motors and solenoids.
   hal_bit_t *power;
 
   // Individual enable pins for each motor. Necessary to be able to disable/re-enable
@@ -420,6 +420,7 @@ static void update(void *arg, long period) {
 
       data->estopped = false;
       *(data->userRequestedEnable) = false;
+      *(data->power) = true;
 
       reset = true;
     }
@@ -449,6 +450,7 @@ static void update(void *arg, long period) {
   if(data->estop && !data->estopped) {
     data->timeSinceEStop = 0;
     data->estopped = true;
+    *(data->power) = false;
   }
 
   *(data->emcEnable) = !data->estop;
