@@ -24,7 +24,7 @@
 #include <fcntl.h>
 
 MODULE_AUTHOR("John Allwine");
-MODULE_DESCRIPTION("E-Stop conditions on Pocket NC pro machine.");
+MODULE_DESCRIPTION("E-Stop conditions on Penta Machine Solo.");
 MODULE_LICENSE("GPL");
 
 // helper macro for easily creating HAL pins
@@ -42,7 +42,7 @@ typedef struct {
   // was pushed or released for timing or for
   // making assumptions about motor/spindle faults
   // (the motors and VFD will report faults when
-  // they aren't powered, which they own't be if
+  // they aren't powered, which they won't be if
   // the physical E-Stop button is pressed).
   hal_bit_t buttonPushed;
   hal_bit_t buttonReleased;
@@ -164,7 +164,7 @@ typedef struct {
 #define UNHOME_TIME 100
 
 // Time when the machine-on pin should go high after a reset.
-#define MACHINE_ON_TIME 1100
+#define MACHINE_ON_TIME 3100
 
 // How much time to give all the motors to get out of a fault state at start up or
 // after releasing the physical E-Stop button.
@@ -180,7 +180,7 @@ typedef struct {
 // Time that must elapse after the user clicks the E-Stop reset in the UI
 // before we actually reset software E-Stop (this helps prevent reporting
 // motor faults when the motors are still resetting).
-#define RESET_TIME 1000
+#define RESET_TIME 3000
 
 static data_t *data;
 
@@ -203,6 +203,7 @@ static void update(void *arg, long period) {
   const hal_bit_t bFError = *(data->bFError);
   const hal_bit_t cFError = *(data->cFError);
 
+  const hal_bit_t power = *(data->power);
   const hal_bit_t button = *(data->button);
   const hal_s32_t spindleErrorCode = *(data->spindleErrorCode) && notIgnoreComErrors;
   const hal_bit_t spindleModbusOk = *(data->spindleModbusOk) || ignoreComErrors;
@@ -235,6 +236,7 @@ static void update(void *arg, long period) {
   // Check that enough time after a user initiated E-Stop reset has elapsed.
   const hal_bit_t preventFaultsFromButtonPushAndStartup = !button && 
                                                           !buttonPushed && 
+                                                          power &&
                                                           data->timeSinceStartUp > STARTUP_TIME && 
                                                           data->timeSinceEnable > RESET_TIME &&
                                                           data->timeSinceButtonRelease > STARTUP_TIME;
@@ -337,6 +339,11 @@ static void update(void *arg, long period) {
       data->timeSinceButtonRelease = 0;
     }
     data->buttonReleased = true;
+    *(data->power) = 1;
+  }
+
+  if(userRequestEnable) {
+    *(data->power) = 1;
   }
 
   *(data->unhome) = data->estopped && data->timeSinceEStop > UNHOME_TIME;
