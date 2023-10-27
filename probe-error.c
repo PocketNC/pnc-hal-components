@@ -41,6 +41,7 @@ MODULE_LICENSE("GPL");
 typedef struct {
   hal_s32_t *motion_type;
   hal_bit_t *probe_error;
+  hal_bit_t *probe_on;
   hal_bit_t *abort;
 } data_t;
 
@@ -51,7 +52,7 @@ static int comp_id;
 
 static void update(void *arg, long period) {
   hal_bit_t lastAbort = *(data->abort);
-  *(data->abort) = *(data->motion_type) == EMC_MOTION_TYPE_PROBING && *(data->probe_error);
+  *(data->abort) = *(data->probe_on) && *(data->motion_type) == EMC_MOTION_TYPE_PROBING && *(data->probe_error);
 
   if(!lastAbort && *(data->abort)) {
     // only send error on transition into abort state
@@ -71,10 +72,12 @@ int rtapi_app_main(void) {
 
   PIN(s32, HAL_IN, motion_type, motion-type);
   PIN(bit, HAL_IN, probe_error, probe-error);
+  PIN(bit, HAL_IN, probe_on, probe-on);
   PIN(bit, HAL_OUT, abort, abort);
 
   *(data->motion_type) = 0;
   *(data->probe_error) = 0;
+  *(data->probe_on) = 0;
   *(data->abort) = 0;
 
   char name[20];
