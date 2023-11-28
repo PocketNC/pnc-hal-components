@@ -5,3 +5,4 @@ install:
 	instcomp --install feedrate-v2.c
 	instcomp --install probe-error.c
 	instcomp --install reset-pin.c
+	instcomp --install high-flow-lt.c
