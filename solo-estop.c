@@ -56,12 +56,14 @@ typedef struct {
   hal_bit_t zFaulted;
   hal_bit_t bFaulted;
   hal_bit_t cFaulted;
+  hal_bit_t tFaulted;
 
   hal_bit_t xFErrored;
   hal_bit_t yFErrored;
   hal_bit_t zFErrored;
   hal_bit_t bFErrored;
   hal_bit_t cFErrored;
+  hal_bit_t tFErrored;
 
   hal_bit_t estop;
   hal_bit_t estopped;
@@ -77,6 +79,7 @@ typedef struct {
   hal_bit_t *zFault;           // Z fault as reported from the ClearPath motors. Connect to torque.fault.z.
   hal_bit_t *bFault;           // B fault as reported from the ClearPath motors. Connect to torque.fault.b.
   hal_bit_t *cFault;           // C fault as reported from the ClearPath motors. Connect to torque.fault.c.
+  hal_bit_t *tFault;           // T fault as reported from the ClearPath motors. Connect to torque.fault.t.
   hal_bit_t *button;           // Reports the state of the physical E-Stop button that disconnects power to the motors via a relay.
   hal_s32_t *spindleErrorCode; // Reports an error code from the VFD that controls the spindle. Connect to spindle-vfd.error-code.
   hal_bit_t *spindleModbusOk;  // Reports whether the ModBus connection to the VFD that controls the spindle is ok. Connect to spindle-vfd.modbus-ok.
@@ -87,6 +90,7 @@ typedef struct {
   hal_bit_t *zFError;
   hal_bit_t *bFError;
   hal_bit_t *cFError;
+  hal_bit_t *tFError;
 
   hal_bit_t *ignoreComErrors;
 
@@ -153,6 +157,7 @@ typedef struct {
   hal_bit_t *zMotorEnable;
   hal_bit_t *bMotorEnable;
   hal_bit_t *cMotorEnable;
+  hal_bit_t *tMotorEnable;
 
   hal_bit_t *unhome;
 } data_t;
@@ -196,12 +201,14 @@ static void update(void *arg, long period) {
   const hal_bit_t zFault = *(data->zFault) && notIgnoreComErrors;
   const hal_bit_t bFault = *(data->bFault) && notIgnoreComErrors;
   const hal_bit_t cFault = *(data->cFault) && notIgnoreComErrors;
+  const hal_bit_t tFault = *(data->tFault) && notIgnoreComErrors;
 
   const hal_bit_t xFError = *(data->xFError);
   const hal_bit_t yFError = *(data->yFError);
   const hal_bit_t zFError = *(data->zFError);
   const hal_bit_t bFError = *(data->bFError);
   const hal_bit_t cFError = *(data->cFError);
+  const hal_bit_t tFError = *(data->cFError);
 
   const hal_bit_t power = *(data->power);
   const hal_bit_t button = *(data->button);
@@ -216,12 +223,14 @@ static void update(void *arg, long period) {
   const hal_bit_t zFaulted = data->zFaulted;
   const hal_bit_t bFaulted = data->bFaulted;
   const hal_bit_t cFaulted = data->cFaulted;
+  const hal_bit_t tFaulted = data->tFaulted;
 
   const hal_bit_t xFErrored = data->xFErrored;
   const hal_bit_t yFErrored = data->yFErrored;
   const hal_bit_t zFErrored = data->zFErrored;
   const hal_bit_t bFErrored = data->bFErrored;
   const hal_bit_t cFErrored = data->cFErrored;
+  const hal_bit_t tFErrored = data->tFErrored;
 
   const hal_bit_t spindleErroredWithCode = data->spindleErroredWithCode;
   const hal_bit_t spindleModbusNotOk = data->spindleModbusNotOk;
@@ -278,6 +287,13 @@ static void update(void *arg, long period) {
     data->cFaulted = true;
   }
 
+  if(tFault && preventFaultsFromButtonPushAndStartup) {
+    if(!tFaulted) {
+      rtapi_print_msg(RTAPI_MSG_ERR, "E-Stop: Coolant motor fault.");
+    }
+    data->tFaulted = true;
+  }
+
   if(xFError) {
     if(!xFErrored) {
       rtapi_print_msg(RTAPI_MSG_ERR, "E-Stop: X following error.");
@@ -311,6 +327,13 @@ static void update(void *arg, long period) {
       rtapi_print_msg(RTAPI_MSG_ERR, "E-Stop: C following error.");
     }
     data->cFErrored = true;
+  }
+
+  if(tFError) {
+    if(!tFErrored) {
+      rtapi_print_msg(RTAPI_MSG_ERR, "E-Stop: Coolant motor following error.");
+    }
+    data->tFErrored = true;
   }
 
   if(spindleErrorCode != 0 && preventFaultsFromButtonPushAndStartup) {
@@ -354,11 +377,13 @@ static void update(void *arg, long period) {
                     zFault ||
                     bFault ||
                     cFault ||
+                    tFault ||
                     xFError ||
                     yFError ||
                     zFError ||
                     bFError ||
                     cFError ||
+                    tFError ||
                     !spindleModbusOk ||
                     spindleErrorCode != 0 ||
                     button;
@@ -369,11 +394,13 @@ static void update(void *arg, long period) {
                       zFaulted ||
                       bFaulted ||
                       cFaulted ||
+                      tFaulted ||
                       xFErrored ||
                       yFErrored ||
                       zFErrored ||
                       bFErrored ||
                       cFErrored ||
+                      tFErrored ||
                       spindleModbusNotOk ||
                       spindleErroredWithCode != 0 ||
                       buttonPushed;
@@ -395,12 +422,14 @@ static void update(void *arg, long period) {
       *(data->zMotorEnable) = false;
       *(data->bMotorEnable) = false;
       *(data->cMotorEnable) = false;
+      *(data->tMotorEnable) = false;
     } else {
       *(data->xMotorEnable) = true;
       *(data->yMotorEnable) = true;
       *(data->zMotorEnable) = true;
       *(data->bMotorEnable) = true;
       *(data->cMotorEnable) = true;
+      *(data->tMotorEnable) = true;
     }
 
     // Once enough time has elapsed, actually reset the E-Stop.
@@ -413,12 +442,14 @@ static void update(void *arg, long period) {
       data->zFaulted = false;
       data->bFaulted = false;
       data->cFaulted = false;
+      data->tFaulted = false;
 
       data->xFErrored = false;
       data->yFErrored = false;
       data->zFErrored = false;
       data->bFErrored = false;
       data->cFErrored = false;
+      data->tFErrored = false;
 
       data->spindleErroredWithCode = 0;
       data->spindleModbusNotOk = false;
@@ -485,12 +516,14 @@ int rtapi_app_main(void) {
   PIN(bit, HAL_IN, zFault, z-fault);
   PIN(bit, HAL_IN, bFault, b-fault);
   PIN(bit, HAL_IN, cFault, c-fault);
+  PIN(bit, HAL_IN, tFault, t-fault);
 
   PIN(bit, HAL_IN, xFError, x-f-error);
   PIN(bit, HAL_IN, yFError, y-f-error);
   PIN(bit, HAL_IN, zFError, z-f-error);
   PIN(bit, HAL_IN, bFError, b-f-error);
   PIN(bit, HAL_IN, cFError, c-f-error);
+  PIN(bit, HAL_IN, tFError, t-f-error);
 
   PIN(bit, HAL_IN, ignoreComErrors, ignore-com-errors);
 
@@ -511,6 +544,7 @@ int rtapi_app_main(void) {
   PIN(bit, HAL_OUT, zMotorEnable, z-motor-enable);
   PIN(bit, HAL_OUT, bMotorEnable, b-motor-enable);
   PIN(bit, HAL_OUT, cMotorEnable, c-motor-enable);
+  PIN(bit, HAL_OUT, tMotorEnable, t-motor-enable);
   PIN(bit, HAL_OUT, unhome, unhome);
 
   *(data->xFault) = 0;
@@ -518,12 +552,14 @@ int rtapi_app_main(void) {
   *(data->zFault) = 0;
   *(data->bFault) = 0;
   *(data->cFault) = 0;
+  *(data->tFault) = 0;
 
   *(data->xFError) = 0;
   *(data->yFError) = 0;
   *(data->zFError) = 0;
   *(data->bFError) = 0;
   *(data->cFError) = 0;
+  *(data->tFError) = 0;
 
   *(data->button) = 0;
   *(data->spindleErrorCode) = 0;
@@ -537,6 +573,7 @@ int rtapi_app_main(void) {
   *(data->zMotorEnable) = 1;
   *(data->bMotorEnable) = 1;
   *(data->cMotorEnable) = 1;
+  *(data->tMotorEnable) = 1;
   *(data->machineOn) = 0;
 
   *(data->ignoreComErrors) = 0;
@@ -546,12 +583,14 @@ int rtapi_app_main(void) {
   data->zFaulted = 0;
   data->bFaulted = 0;
   data->cFaulted = 0;
+  data->tFaulted = 0;
 
   data->xFErrored = 0;
   data->yFErrored = 0;
   data->zFErrored = 0;
   data->bFErrored = 0;
   data->cFErrored = 0;
+  data->tFErrored = 0;
 
   data->estop = 0;
   data->estopped = 0;
