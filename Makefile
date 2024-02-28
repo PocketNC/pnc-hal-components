@@ -6,3 +6,5 @@ install:
 	instcomp --install probe-error.c
 	instcomp --install reset-pin.c
 	instcomp --install high-flow-lt.c
+	instcomp --install orN.c
+	instcomp --install andN.c
