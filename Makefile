@@ -8,3 +8,4 @@ install:
 	instcomp --install high-flow-lt.c
 	instcomp --install orN.c
 	instcomp --install andN.c
+	instcomp --install user-message.c
